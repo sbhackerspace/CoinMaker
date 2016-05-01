@@ -23,6 +23,7 @@ import cv2
 from docopt import docopt
 import numpy as np
 import os
+import time
 
 ################################################################################
 def DoesFileExist(FileName):
@@ -65,14 +66,27 @@ def AddCircle(Image, Diameter):
   return cv2.bitwise_and(Image, Mask)
 
 ################################################################################
+def DrawBorder(Image):
+  Height, Width = Image.shape
+  TopLeft = (1, 1)
+  TopRight = (Width - 1, 1)
+  BottomLeft = (1, Height - 1)
+  BottomRight = (Width - 1, Height - 1)
+  Image = cv2.line(Image, TopLeft, TopRight, 255)
+  Image = cv2.line(Image, TopLeft, BottomLeft, 255)
+  Image = cv2.line(Image, TopRight, BottomRight, 255)
+  Image = cv2.line(Image, BottomLeft, BottomRight, 255)
+  return Image
+
+################################################################################
 def AddVents(Image, Diameter):
-  OriginalWidth, OriginalHeight = Image.shape
+  OriginalHeight, OriginalWidth = Image.shape
   Image = AddCircle(Image, Diameter)
   Image, PaddingHeight = AddTopPadding(Image)
-  TopLeft = int(.2 * OriginalWidth), 1
-  TopRight = int(.8 * OriginalWidth), 1
-  Center = int(.5 * OriginalWidth), int(.5 * Image.shape[1])
-  CoinCenter = (OriginalWidth/2, PaddingHeight +(OriginalHeight/2))
+  TopLeft = int(.2 * OriginalHeight), 1
+  TopRight = int(.8 * OriginalHeight), 1
+  Center = int(.5 * OriginalHeight), int(.5 * Image.shape[1])
+  CoinCenter = (OriginalHeight/2, PaddingHeight +(OriginalWidth/2))
 
   Mask = np.zeros(Image.shape,dtype=np.uint8)
   #Draw White Cutout circle
@@ -98,8 +112,22 @@ def AddVents(Image, Diameter):
     Diameter -1, \
     0, \
     -1)
+  Image += Mask
+  Image = DrawBorder(Image)
+  Mask = DrawBorder(Mask)
   return Image, Mask
 
+
+################################################################################
+def MakeCoin(Image, Diameter):
+  Image, Mask = AddVents(Image, Diameter)
+  Image = cv2.flip(Image, 1)
+  CurrentTime = str(int(time.time()))
+  cv2.imwrite("OutputImages/" + CurrentTime + "Middle.png", Image)
+  cv2.imwrite("OutputImages/" + CurrentTime + "Front.png", Mask)
+  cv2.imwrite("OutputImages/" + CurrentTime + "Back.png", Mask)
+  cv2.waitKey(0)
+  cv2.destroyAllWindows()
 
 ################################################################################
 ################################################################################
@@ -123,11 +151,5 @@ if __name__ == "__main__":
   if len(CommandLineArguments['-d']):
     Diameter = int(CommandLineArguments['-d'][0])
 
-  Image, Mask = AddVents(Image, Diameter)
-
-  Image = cv2.flip(Image, 1)
-  cv2.imshow("Hack the Planet", Image)
-  cv2.imshow("Hack the Planet mask", Mask)
-  cv2.waitKey(0)
-  cv2.destroyAllWindows()
+  MakeCoin(Image, Diameter)
 
