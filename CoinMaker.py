@@ -22,6 +22,7 @@ Options:
 import cv2
 from docopt import docopt
 import numpy as np
+import matplotlib.pyplot as plt
 import os
 import time
 
@@ -35,6 +36,7 @@ def DoesFileExist(FileName):
 def GetBlackAndWhiteImageFromFile(FileName, NoDithering):
   Image = \
     cv2.imread(FileName, cv2.IMREAD_GRAYSCALE)
+  Image = np.bitwise_not(Image)
   if NoDithering:
     return cv2.threshold(Image, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
   else:
@@ -47,23 +49,30 @@ def ScaleImage(Image, ScaleFactor):
       (int(ScaleFactor * Image.shape[1]), int(ScaleFactor * Image.shape[0])))
 
 ################################################################################
-def AddTopPadding(Image):
-  PaddingHeight = int(.25 * Image.shape[1])
+def AddPadding(Image):
+  PaddingHeightTop = int(.55 * Image.shape[1])
+  PaddingHeightBottom = int(.15 * Image.shape[1])
+  PaddingWidth = int(.15 * Image.shape[0])
   return cv2.copyMakeBorder(\
     Image, \
-    PaddingHeight,\
-    0, \
-    0, \
-    0, \
+    PaddingHeightTop,\
+    PaddingHeightBottom, \
+    PaddingWidth, \
+    PaddingWidth, \
     cv2.BORDER_CONSTANT, \
-    value=0), \
-    PaddingHeight
+    value=255), \
+    PaddingHeightTop, \
+    PaddingHeightBottom, \
+    PaddingWidth
 
 ################################################################################
 def AddCircle(Image, Diameter):
+  InvertedMask = 255 * np.ones((Image.shape), np.uint8)
+  cv2.circle(Image, (Image.shape[1]/2, Image.shape[0]/2), Diameter, 0, 3)
+  cv2.circle(InvertedMask, (Image.shape[1]/2, Image.shape[0]/2), Diameter, 0, -1)
   Mask = np.zeros((Image.shape), np.uint8)
-  cv2.circle(Mask, (Image.shape[1]/2, Image.shape[0]/2), Diameter, 255, -1)
-  return cv2.bitwise_and(Image, Mask)
+  cv2.circle(Mask, (Image.shape[1]/2, Image.shape[0]/2), Diameter, 1, -1)
+  return (Image * Mask) + InvertedMask
 
 ################################################################################
 def DrawBorder(Image):
@@ -72,21 +81,21 @@ def DrawBorder(Image):
   TopRight = (Width - 1, 1)
   BottomLeft = (1, Height - 1)
   BottomRight = (Width - 1, Height - 1)
-  Image = cv2.line(Image, TopLeft, TopRight, 255)
-  Image = cv2.line(Image, TopLeft, BottomLeft, 255)
-  Image = cv2.line(Image, TopRight, BottomRight, 255)
-  Image = cv2.line(Image, BottomLeft, BottomRight, 255)
+  Image = cv2.line(Image, TopLeft, TopRight, 0)
+  Image = cv2.line(Image, TopLeft, BottomLeft, 0)
+  Image = cv2.line(Image, TopRight, BottomRight, 0)
+  Image = cv2.line(Image, BottomLeft, BottomRight, 0)
   return Image
 
 ################################################################################
 def AddVents(Image, Diameter):
   OriginalHeight, OriginalWidth = Image.shape
   Image = AddCircle(Image, Diameter)
-  Image, PaddingHeight = AddTopPadding(Image)
-  TopLeft = int(.2 * OriginalHeight), 1
-  TopRight = int(.8 * OriginalHeight), 1
-  Center = int(.5 * OriginalHeight), int(.5 * Image.shape[1])
-  CoinCenter = (OriginalHeight/2, PaddingHeight +(OriginalWidth/2))
+  Image, PaddingHeightTop, PaddingHeightBottom, PaddingWidth = AddPadding(Image)
+  TopLeft = int(.35 * Image.shape[1]), 1
+  TopRight = int(.65 * Image.shape[1]), 1
+  Center = int(.5 * Image.shape[1]), int(.5 * Image.shape[0])
+  CoinCenter = (Center[0], PaddingHeightTop +(OriginalHeight/2))
 
   Mask = np.zeros(Image.shape,dtype=np.uint8)
   #Draw White Cutout circle
@@ -96,6 +105,9 @@ def AddVents(Image, Diameter):
     Diameter, \
     255, \
     thickness= 1)
+
+  Image += Mask
+
   #Fill Triangle to clear out circle inside vent
   Triangle = np.ones(Image.shape, dtype=np.uint8)
   Triangle = cv2.fillConvexPoly(Mask, np.array([TopLeft, Center, TopRight]), 0)
@@ -112,27 +124,28 @@ def AddVents(Image, Diameter):
     Diameter -1, \
     0, \
     -1)
-  Image += Mask
   Image = DrawBorder(Image)
   Mask = DrawBorder(Mask)
+  Mask = np.bitwise_not(Mask)
   return Image, Mask
 
 
 ################################################################################
-def MakeCoin(Image, Diameter):
+def CreateCoinAndSaveImages(Image, Diameter):
   Image, Mask = AddVents(Image, Diameter)
   Image = cv2.flip(Image, 1)
   CurrentTime = str(int(time.time()))
-  cv2.imwrite("OutputImages/" + CurrentTime + "Middle.png", Image)
-  cv2.imwrite("OutputImages/" + CurrentTime + "Front.png", Mask)
-  cv2.imwrite("OutputImages/" + CurrentTime + "Back.png", Mask)
-  cv2.waitKey(0)
-  cv2.destroyAllWindows()
+  cv2.imwrite("static/img/" + CurrentTime + "Middle.png", Mask)
+  os.system(\
+    "autotrace --output-format svg --output-file static/img/" + \
+    CurrentTime + "Middle.svg --color-count 2 static/img/" + CurrentTime + "Middle.png")
+
+  cv2.imwrite("static/img/" + CurrentTime + "Front.png", Image)
+  cv2.imwrite("static/img/" + CurrentTime + "Back.png", Image)
+  return CurrentTime
 
 ################################################################################
-################################################################################
-if __name__ == "__main__":
-  CommandLineArguments = docopt(__doc__, version = 0.1)
+def MakeCoin(CommandLineArguments):
   FileName = CommandLineArguments["IMAGEFILENAME"]
   DoesFileExist(FileName)
 
@@ -145,11 +158,19 @@ if __name__ == "__main__":
       GetBlackAndWhiteImageFromFile(FileName, CommandLineArguments['-n']), \
       ScaleFactor)
 
+  cv2.waitKey()
   Diameter = Image.shape[0]/2
   if Image.shape[1] < Diameter/2:
     Diameter = Image.shape[1]/2
   if len(CommandLineArguments['-d']):
     Diameter = int(CommandLineArguments['-d'][0])
 
-  MakeCoin(Image, Diameter)
+  return CreateCoinAndSaveImages(Image, Diameter)
+
+################################################################################
+################################################################################
+if __name__ == "__main__":
+  CommandLineArguments = docopt(__doc__, version = 0.1)
+  MakeCoin(CommandLineArguments)
+  cv2.waitKey()
 
