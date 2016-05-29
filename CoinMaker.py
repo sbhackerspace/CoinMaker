@@ -7,7 +7,7 @@
  This script formats images into coin making molds
 
 Usage:
-  CoinMaker.py [options]... (IMAGEFILENAME)
+  CoinMaker.py [options]... (FRONTIMAGEFILENAME) (BACKIMAGEFILENAME)
 
 Options:
     -h -? --help                        Show this screen.
@@ -29,8 +29,7 @@ import time
 ################################################################################
 def DoesFileExist(FileName):
   if not os.path.isfile(FileName):
-    print "ERROR: ", FileName, "Does not exist"
-    exit()
+    raise FileNotFoundError(FileName)
 
 ################################################################################
 def GetBlackAndWhiteImageFromFile(FileName, NoDithering):
@@ -88,16 +87,18 @@ def DrawBorder(Image):
   return Image
 
 ################################################################################
-def AddVents(Image, Diameter):
-  OriginalHeight, OriginalWidth = Image.shape
-  Image = AddCircle(Image, Diameter)
-  Image, PaddingHeightTop, PaddingHeightBottom, PaddingWidth = AddPadding(Image)
-  TopLeft = int(.35 * Image.shape[1]), 1
-  TopRight = int(.65 * Image.shape[1]), 1
-  Center = int(.5 * Image.shape[1]), int(.5 * Image.shape[0])
+def AddVents(FrontImage, BackImage, Diameter):
+  OriginalHeight, OriginalWidth = FrontImage.shape
+  FrontImage = AddCircle(FrontImage, Diameter)
+  BackImage = AddCircle(BackImage, Diameter)
+  FrontImage, PaddingHeightTop, PaddingHeightBottom, PaddingWidth = AddPadding(FrontImage)
+  BackImage, PaddingHeightTop, PaddingHeightBottom, PaddingWidth = AddPadding(BackImage)
+  TopLeft = int(.35 * FrontImage.shape[1]), 1
+  TopRight = int(.65 * FrontImage.shape[1]), 1
+  Center = int(.5 * FrontImage.shape[1]), int(.5 * FrontImage.shape[0])
   CoinCenter = (Center[0], PaddingHeightTop +(OriginalHeight/2))
 
-  Mask = np.zeros(Image.shape,dtype=np.uint8)
+  Mask = np.zeros(FrontImage.shape, dtype=np.uint8)
   #Draw White Cutout circle
   cv2.circle(\
     Mask, \
@@ -106,10 +107,11 @@ def AddVents(Image, Diameter):
     255, \
     thickness= 1)
 
-  Image += Mask
+  FrontImage += Mask
+  BackImage += Mask
 
   #Fill Triangle to clear out circle inside vent
-  Triangle = np.ones(Image.shape, dtype=np.uint8)
+  Triangle = np.ones(Mask.shape, dtype=np.uint8)
   Triangle = cv2.fillConvexPoly(Mask, np.array([TopLeft, Center, TopRight]), 0)
 
   #Add Vents
@@ -124,48 +126,56 @@ def AddVents(Image, Diameter):
     Diameter -1, \
     0, \
     -1)
-  Image = DrawBorder(Image)
+  FrontImage = DrawBorder(FrontImage)
+  BackImage = DrawBorder(BackImage)
   Mask = DrawBorder(Mask)
   Mask = np.bitwise_not(Mask)
-  return Image, Mask
-
+  return FrontImage, BackImage, Mask
 
 ################################################################################
-def CreateCoinAndSaveImages(Image, Diameter):
-  Image, Mask = AddVents(Image, Diameter)
-  Image = cv2.flip(Image, 1)
+def CreateCoinAndSaveImages(FrontImage, BackImage, Diameter):
+  FrontImage, BackImage, Mask = AddVents(FrontImage, BackImage, Diameter)
+  FrontImage = cv2.flip(FrontImage, 1)
+  BackImage = cv2.flip(BackImage, 1)
   CurrentTime = str(int(time.time()))
   cv2.imwrite("static/img/" + CurrentTime + "Middle.png", Mask)
   os.system(\
     "autotrace --output-format svg --output-file static/img/" + \
     CurrentTime + "Middle.svg --color-count 2 static/img/" + CurrentTime + "Middle.png")
 
-  cv2.imwrite("static/img/" + CurrentTime + "Front.png", Image)
-  cv2.imwrite("static/img/" + CurrentTime + "Back.png", Image)
+  cv2.imwrite("static/img/" + CurrentTime + "Front.png", FrontImage)
+  cv2.imwrite("static/img/" + CurrentTime + "Back.png", BackImage)
   return CurrentTime
 
 ################################################################################
 def MakeCoin(CommandLineArguments):
-  FileName = CommandLineArguments["IMAGEFILENAME"]
-  DoesFileExist(FileName)
+  FrontFileName = CommandLineArguments["FRONTIMAGEFILENAME"]
+  DoesFileExist(FrontFileName)
 
+  BackFileName = CommandLineArguments["BACKIMAGEFILENAME"]
+  DoesFileExist(BackFileName)
   ScaleFactor = 1
   if len(CommandLineArguments['-s']):
     ScaleFactor = float(CommandLineArguments['-s'][0])
 
-  Image = \
-    ScaleImage(\
-      GetBlackAndWhiteImageFromFile(FileName, CommandLineArguments['-n']), \
-      ScaleFactor)
+  FrontImage = ScaleImage(
+    GetBlackAndWhiteImageFromFile(FrontFileName, CommandLineArguments['-n']),
+    ScaleFactor)
 
-  cv2.waitKey()
-  Diameter = Image.shape[0]/2
-  if Image.shape[1] < Diameter/2:
-    Diameter = Image.shape[1]/2
+  BackImage = ScaleImage(
+    GetBlackAndWhiteImageFromFile(BackFileName, CommandLineArguments['-n']),
+    ScaleFactor)
+
+  if FrontImage.shape != BackImage.shape:
+    raise ValueError("Front Image and back Image must be the same size")
+
+  Diameter = FrontImage.shape[0]/2
+  if FrontImage.shape[1] < Diameter/2:
+    Diameter = FrontImage.shape[1]/2
   if len(CommandLineArguments['-d']):
     Diameter = int(CommandLineArguments['-d'][0])
 
-  return CreateCoinAndSaveImages(Image, Diameter)
+  return CreateCoinAndSaveImages(FrontImage, BackImage, Diameter)
 
 ################################################################################
 ################################################################################

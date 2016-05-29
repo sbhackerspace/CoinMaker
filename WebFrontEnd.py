@@ -19,10 +19,11 @@ def allowed_file(filename):
 def GetPage(filename = None):
     page = """
     <!doctype html>
-    <title>Upload new File</title>
-    <h1>Upload new File</h1>
+    <title>Upload New Coin</title>
+    <h1>Upload New Coin</h1>
     <form action="" method=post enctype=multipart/form-data>
-      <p><input type=file name=file>
+      <p><b>Front Image:</b><input type=file name=front>
+      <p><b>Back Image:</b><input type=file name=back>
          <input type=submit value=Upload>
     </form>
     <p>"""
@@ -30,30 +31,45 @@ def GetPage(filename = None):
       page += '<img src="' + '/static/img/' + filename + 'Front.png"'
       page += ' alt="front">'
       page += '<img src="' + '/static/img/' + filename + 'Middle.png"'
-      page += ' alt="front">'
+      page += ' alt="middle">'
       page += '<img src="' + '/static/img/' + filename + 'Back.png"'
-      page += ' alt="front">'
+      page += ' alt="">'
 
 
     page += '</p>'
     return page
 
 ################################################################################
+def uploadFile(file):
+  if file and allowed_file(file.filename):
+    filename = os.path.join(
+      app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+    file.save(filename)
+    return filename
+
+
+################################################################################
 @app.route("/", methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        file = request.files['file']
-        if file and allowed_file(file.filename):
-            filename = \
-              os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
-            file.save(filename)
-            Arguments = \
-              {'-d': [], '-n': 0, '-o': [], '-s': [],'IMAGEFILENAME': filename}
+        front = request.files['front']
+        back = request.files['back']
+        frontFileName = uploadFile(front)
+        backFileName = uploadFile(back)
 
+        if frontFileName and backFileName:
+          Arguments = \
+          {'-d': [], '-n': 0, '-o': [], '-s': []}
+          Arguments['FRONTIMAGEFILENAME'] = frontFileName
+          Arguments['BACKIMAGEFILENAME'] = backFileName
+
+          try:
             CurrentTime = CoinMaker.MakeCoin(Arguments)
-            return GetPage(CurrentTime)
-    else:
-      return GetPage()
+          except Exception as exception:
+            return str(exception)
+
+          return GetPage(CurrentTime)
+    return GetPage()
 
 ################################################################################
 ################################################################################
