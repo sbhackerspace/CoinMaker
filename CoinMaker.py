@@ -22,7 +22,6 @@ Options:
 import cv2
 from docopt import docopt
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import time
 
