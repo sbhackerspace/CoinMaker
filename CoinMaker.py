@@ -79,10 +79,10 @@ def DrawBorder(Image):
   TopRight = (Width - 1, 1)
   BottomLeft = (1, Height - 1)
   BottomRight = (Width - 1, Height - 1)
-  Image = cv2.line(Image, TopLeft, TopRight, 0)
-  Image = cv2.line(Image, TopLeft, BottomLeft, 0)
-  Image = cv2.line(Image, TopRight, BottomRight, 0)
-  Image = cv2.line(Image, BottomLeft, BottomRight, 0)
+  cv2.line(Image, TopLeft, TopRight, 0)
+  cv2.line(Image, TopLeft, BottomLeft, 0)
+  cv2.line(Image, TopRight, BottomRight, 0)
+  cv2.line(Image, BottomLeft, BottomRight, 0)
   return Image
 
 ################################################################################
@@ -114,9 +114,9 @@ def AddVents(FrontImage, BackImage, Diameter):
   Triangle = cv2.fillConvexPoly(Mask, np.array([TopLeft, Center, TopRight]), 0)
 
   #Add Vents
-  Mask = cv2.line(Mask, TopLeft, Center, 255)
-  Mask = cv2.line(Mask, TopRight, Center, 255)
-  Mask = cv2.line(Mask, TopRight, TopLeft, 255)
+  cv2.line(Mask, TopLeft, Center, 255)
+  cv2.line(Mask, TopRight, Center, 255)
+  cv2.line(Mask, TopRight, TopLeft, 255)
 
   #Fill in inside of circle
   cv2.circle(\
@@ -125,6 +125,7 @@ def AddVents(FrontImage, BackImage, Diameter):
     Diameter -1, \
     0, \
     -1)
+
   FrontImage = DrawBorder(FrontImage)
   BackImage = DrawBorder(BackImage)
   Mask = DrawBorder(Mask)
